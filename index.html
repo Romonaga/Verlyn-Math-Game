@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Verlyn Math Game</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="game-card" aria-labelledby="game-title">
+        <header class="game-header">
+          <div>
+            <p class="eyebrow">Verlyn Math</p>
+            <h1 id="game-title">Fast mental math, one question at a time</h1>
+            <p class="subtitle">
+              Answer quickly, protect your score, and reach 20 points to level up.
+            </p>
+          </div>
+          <button id="start-button" class="primary-button">Start game</button>
+        </header>
+
+        <section class="status-panel" aria-label="Game status">
+          <div class="stat">
+            <span class="stat-label">Score</span>
+            <strong id="score">0</strong>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Progress</span>
+            <strong id="progress">0 / 20</strong>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Level</span>
+            <strong id="level">1</strong>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Time left</span>
+            <strong id="timer">10s</strong>
+          </div>
+        </section>
+
+        <section class="progression-panel" aria-label="Level progression details">
+          <div class="stat progression-stat">
+            <span class="stat-label">Timer profile</span>
+            <strong id="timer-profile">10s per question</strong>
+          </div>
+          <div class="stat progression-stat">
+            <span class="stat-label">Next level</span>
+            <strong id="next-level-target">Reach 20 points</strong>
+          </div>
+          <div class="stat progression-stat">
+            <span class="stat-label">Round</span>
+            <strong id="question-count">0</strong>
+          </div>
+        </section>
+
+        <section class="streak-panel" aria-label="Round progress and streak status">
+          <div class="stat streak-stat">
+            <span class="stat-label">Streak</span>
+            <strong id="streak">0</strong>
+          </div>
+          <div class="stat streak-stat">
+            <span class="stat-label">Best streak</span>
+            <strong id="best-streak">0</strong>
+          </div>
+        </section>
+
+        <section class="history-panel" aria-label="Player performance and saved records">
+          <div class="stat history-stat">
+            <span class="stat-label">Accuracy</span>
+            <strong id="accuracy">0%</strong>
+          </div>
+          <div class="stat history-stat">
+            <span class="stat-label">Correct / Misses</span>
+            <strong id="answer-breakdown">0 / 0</strong>
+          </div>
+          <div class="stat history-stat">
+            <span class="stat-label">Best score</span>
+            <strong id="best-score">0</strong>
+          </div>
+          <div class="stat history-stat">
+            <span class="stat-label">Highest level</span>
+            <strong id="highest-level">1</strong>
+          </div>
+        </section>
+
+        <section class="question-panel" aria-live="polite">
+          <p id="round-label" class="round-label">Press start to begin your first round.</p>
+          <h2 id="question-text">Ready to test your speed?</h2>
+          <div id="choices" class="choices" role="list"></div>
+        </section>
+
+        <section class="operator-panel" aria-labelledby="operator-guidance-title">
+          <h2 id="operator-guidance-title">Operator guidance</h2>
+          <ul class="guidance-list">
+            <li>Start a run to generate one mental math prompt at a time.</li>
+            <li>Choose from exactly 3 answers before the timer reaches zero.</li>
+            <li>Correct answers add 5 points. Wrong answers and timeouts subtract 2 points.</li>
+            <li>Reach 20 points to level up and move into the faster timer tier.</li>
+            <li>Your best score, highest level, and lifetime answer stats stay on this device.</li>
+          </ul>
+        </section>
+
+        <p id="feedback" class="feedback" aria-live="polite">
+          Start the game to receive three answer choices for each question.
+        </p>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

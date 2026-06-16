@@ -18,6 +18,7 @@ jobs:
             const requiredSections = [
               'Change Type',
               'Linked Workstream Change',
+              'Verlyn PR Metadata',
               'Acceptance Criteria',
               'Verification Runs Completed',
               'Coverage Summary',

@@ -1,7 +1,8 @@
 const POINTS_TO_ADVANCE = 20;
-const CORRECT_POINTS = 5;
+const CORRECT_POINTS = 2;
 const INCORRECT_PENALTY = 2;
-const LEVEL_TIMER_WINDOWS = [10, 8, 6];
+const QUESTIONS_PER_LEVEL = 12;
+const LEVEL_TIMER_WINDOWS = [10, 8, 6, 6, 5];
 const STORAGE_KEY = 'verlyn-math-game-stats';
 
 const scoreEl = document.getElementById('score');
@@ -25,6 +26,26 @@ const startButtonEl = document.getElementById('start-button');
 
 function getRoundTime(level) {
   return LEVEL_TIMER_WINDOWS[Math.min(level - 1, LEVEL_TIMER_WINDOWS.length - 1)];
+}
+
+function getOperationPool(level) {
+  if (level === 1) {
+    return ['+'];
+  }
+
+  if (level === 2) {
+    return ['+', '-'];
+  }
+
+  if (level === 3) {
+    return ['+', '-', '*'];
+  }
+
+  if (level === 4) {
+    return ['+', '-', '*', '/'];
+  }
+
+  return ['+', '-', '*', '/'];
 }
 
 function getDefaultSavedStats() {
@@ -59,6 +80,7 @@ const state = {
   score: 0,
   level: 1,
   questionNumber: 0,
+  levelQuestionNumber: 0,
   streak: 0,
   bestStreak: 0,
   correctAnswers: 0,
@@ -68,6 +90,8 @@ const state = {
   timerId: null,
   hasAnswered: false,
   gameStarted: false,
+  levelTransitionPending: false,
+  gameOver: false,
   savedStats: loadSavedStats(),
 };
 
@@ -103,21 +127,34 @@ function shuffle(items) {
 
 function createQuestion(level) {
   const maxBase = 10 + level * 5;
-  const operations = ['+', '-'];
+  const operations = getOperationPool(level);
   const operation = operations[randomInt(0, operations.length - 1)];
   let left = randomInt(1, maxBase);
   let right = randomInt(1, maxBase);
+  let answer = 0;
 
-  if (operation === '-' && right > left) {
-    [left, right] = [right, left];
+  if (operation === '+') {
+    answer = left + right;
+  } else if (operation === '-') {
+    if (right > left) {
+      [left, right] = [right, left];
+    }
+    answer = left - right;
+  } else if (operation === '*') {
+    left = randomInt(2, Math.max(4, Math.min(12, 3 + level * 2)));
+    right = randomInt(2, Math.max(4, Math.min(12, 4 + level * 2)));
+    answer = left * right;
+  } else {
+    right = randomInt(2, Math.max(4, Math.min(12, 3 + level * 2)));
+    answer = randomInt(2, Math.max(4, Math.min(12, 4 + level * 2)));
+    left = right * answer;
   }
 
-  const answer = operation === '+' ? left + right : left - right;
   const distractors = new Set();
-
   while (distractors.size < 2) {
     const offset = randomInt(1, 4 + level);
-    const candidate = answer + (Math.random() > 0.5 ? offset : -offset);
+    const direction = Math.random() > 0.5 ? 1 : -1;
+    const candidate = answer + direction * offset;
     if (candidate !== answer && candidate >= 0) {
       distractors.add(candidate);
     }
@@ -132,6 +169,7 @@ function createQuestion(level) {
     prompt: `${left} ${operation} ${right} = ?`,
     answer,
     choices,
+    operation,
   };
 }
 
@@ -153,8 +191,9 @@ function updateStatus() {
   levelEl.textContent = String(state.level);
   timerEl.textContent = `${state.timeLeft}s`;
   timerProfileEl.textContent = `${roundTime}s per question`;
-  nextLevelTargetEl.textContent = pointsRemaining === 0 ? 'Level up on this question' : `${pointsRemaining} points to level ${state.level + 1}`;
-  questionCountEl.textContent = String(state.questionNumber);
+  nextLevelTargetEl.textContent =
+    pointsRemaining === 0 ? 'Milestone reached' : `${pointsRemaining} points to level ${state.level + 1}`;
+  questionCountEl.textContent = `${state.levelQuestionNumber} / ${QUESTIONS_PER_LEVEL}`;
   streakEl.textContent = String(state.streak);
   bestStreakEl.textContent = String(state.bestStreak);
   accuracyEl.textContent = `${getAccuracy(state.correctAnswers, state.missedAnswers)}%`;
@@ -190,8 +229,10 @@ function renderChoices() {
 
 function nextQuestion() {
   state.questionNumber += 1;
+  state.levelQuestionNumber += 1;
   state.timeLeft = getRoundTime(state.level);
   state.hasAnswered = false;
+  state.levelTransitionPending = false;
   state.currentQuestion = createQuestion(state.level);
   roundLabelEl.textContent = `Question ${state.questionNumber} · Level ${state.level}`;
   questionTextEl.textContent = state.currentQuestion.prompt;
@@ -214,30 +255,62 @@ function lockChoices(correctValue, selectedButton) {
   }
 }
 
+function handleLevelAdvance() {
+  const previousLevel = state.level;
+  state.level += 1;
+  state.score = 0;
+  state.streak = 0;
+  state.levelQuestionNumber = 0;
+  state.timeLeft = getRoundTime(state.level);
+  state.levelTransitionPending = true;
+  syncSavedRecords();
+  roundLabelEl.textContent = `Level ${previousLevel} complete · Milestone reached`;
+  questionTextEl.textContent = `Nice work! You reached 20 points and unlocked level ${state.level}.`;
+  setFeedback(`Level cleared! Starting level ${state.level} in a moment with ${state.timeLeft}s per question.`, 'success');
+  updateStatus();
+  window.setTimeout(() => {
+    if (state.gameStarted && !state.gameOver) {
+      nextQuestion();
+    }
+  }, 1200);
+}
+
+function handleLevelFail() {
+  state.gameStarted = false;
+  state.gameOver = true;
+  clearTimer();
+  roundLabelEl.textContent = `Level ${state.level} failed`;
+  questionTextEl.textContent = `You needed ${POINTS_TO_ADVANCE} points in ${QUESTIONS_PER_LEVEL} questions.`;
+  choicesEl.innerHTML = '';
+  startButtonEl.textContent = 'Retry level';
+  setFeedback('Level failed. Wrong answers cost -2, timeouts count as misses only, and you can retry this level now.', 'warning');
+  updateStatus();
+}
+
 function checkProgression() {
   if (state.score >= POINTS_TO_ADVANCE) {
-    const previousLevel = state.level;
-    state.level += 1;
-    state.score = 0;
-    state.streak = 0;
-    state.timeLeft = getRoundTime(state.level);
-    syncSavedRecords();
-    roundLabelEl.textContent = `Level ${previousLevel} complete · Moving to level ${state.level}`;
-    questionTextEl.textContent = `You hit ${POINTS_TO_ADVANCE} points. Get ready for faster questions.`;
-    setFeedback(`Level cleared! Timer tightens to ${state.timeLeft}s for level ${state.level}.`, 'success');
+    handleLevelAdvance();
+    return true;
   }
+
+  if (state.levelQuestionNumber >= QUESTIONS_PER_LEVEL) {
+    handleLevelFail();
+    return true;
+  }
+
+  return false;
 }
 
 function scheduleNextQuestion() {
   window.setTimeout(() => {
-    if (state.gameStarted) {
+    if (state.gameStarted && !state.levelTransitionPending && !state.gameOver) {
       nextQuestion();
     }
   }, 900);
 }
 
 function handleAnswer(selectedValue, selectedButton) {
-  if (state.hasAnswered || !state.currentQuestion) {
+  if (state.hasAnswered || !state.currentQuestion || !state.gameStarted) {
     return;
   }
 
@@ -250,7 +323,7 @@ function handleAnswer(selectedValue, selectedButton) {
     state.streak += 1;
     state.bestStreak = Math.max(state.bestStreak, state.streak);
     recordCorrectAnswer();
-    setFeedback(`Correct! +5 points. Accuracy: ${getAccuracy(state.correctAnswers, state.missedAnswers)}%.`, 'success');
+    setFeedback(`Correct! +2 points. Accuracy: ${getAccuracy(state.correctAnswers, state.missedAnswers)}%.`, 'success');
   } else {
     state.score = Math.max(0, state.score - INCORRECT_PENALTY);
     state.streak = 0;
@@ -260,25 +333,28 @@ function handleAnswer(selectedValue, selectedButton) {
 
   syncSavedRecords();
   lockChoices(state.currentQuestion.answer, selectedButton);
-  checkProgression();
   updateStatus();
-  scheduleNextQuestion();
+
+  if (!checkProgression()) {
+    scheduleNextQuestion();
+  }
 }
 
 function handleTimeout() {
-  if (state.hasAnswered || !state.currentQuestion) {
+  if (state.hasAnswered || !state.currentQuestion || !state.gameStarted) {
     return;
   }
 
   state.hasAnswered = true;
-  state.score = Math.max(0, state.score - INCORRECT_PENALTY);
   state.streak = 0;
   recordMiss();
-  setFeedback(`Time ran out and counts as a miss. -2 points. Correct answer: ${state.currentQuestion.answer}.`, 'warning');
+  setFeedback(`Time ran out. That miss does not change your score. Correct answer: ${state.currentQuestion.answer}.`, 'warning');
   lockChoices(state.currentQuestion.answer);
-  checkProgression();
   updateStatus();
-  scheduleNextQuestion();
+
+  if (!checkProgression()) {
+    scheduleNextQuestion();
+  }
 }
 
 function startRoundTimer() {
@@ -299,9 +375,12 @@ function startRoundTimer() {
 function startGame() {
   clearTimer();
   state.gameStarted = true;
+  state.gameOver = false;
+  state.levelTransitionPending = false;
   state.score = 0;
   state.level = 1;
   state.questionNumber = 0;
+  state.levelQuestionNumber = 0;
   state.streak = 0;
   state.bestStreak = 0;
   state.correctAnswers = 0;
@@ -311,7 +390,7 @@ function startGame() {
   state.timeLeft = getRoundTime(1);
   state.savedStats = loadSavedStats();
   startButtonEl.textContent = 'Restart game';
-  setFeedback('Choose the correct answer before the timer runs out. Misses and timeouts both cost 2 points, and your device keeps lifetime records.', '');
+  setFeedback('Choose 1 of 3 answers. Correct answers add +2, wrong answers cost -2, and timeouts count as misses without changing score.', '');
   updateStatus();
   nextQuestion();
 }

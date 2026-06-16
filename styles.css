@@ -184,6 +184,10 @@ ul {
   color: #fdba74;
 }
 
+.feedback:empty {
+  display: none;
+}
+
 @media (max-width: 640px) {
   .game-header {
     flex-direction: column;
